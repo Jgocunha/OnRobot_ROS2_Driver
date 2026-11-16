@@ -1,4 +1,5 @@
 #include "onrobot_driver/rg_hardware_interface.hpp"
+
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -7,6 +8,7 @@ namespace rg_hardware_interface
 
     RGHardwareInterface::RGHardwareInterface()
         : finger_width_state_(0.0),
+          finger_width_velocity_(0.0),
           finger_width_command_(0.0)
     {
     }
@@ -119,6 +121,7 @@ namespace rg_hardware_interface
             finger_width_state_ = gripper_->getWidthWithOffset();
             // Set the command to the current state to avoid moving to 0.0 at start.
             finger_width_command_ = finger_width_state_;
+            finger_width_velocity_ = 0.0;
         }
         catch (const std::exception &e)
         {
@@ -162,6 +165,7 @@ namespace rg_hardware_interface
     {
         std::vector<hardware_interface::StateInterface> state_interfaces;
         state_interfaces.emplace_back(hardware_interface::StateInterface(prefix_ + "finger_width", "position", &finger_width_state_));
+        state_interfaces.emplace_back(hardware_interface::StateInterface(prefix_ + "finger_width", "velocity", &finger_width_velocity_));
         return state_interfaces;
     }
 
@@ -173,7 +177,7 @@ namespace rg_hardware_interface
     }
 
     hardware_interface::return_type RGHardwareInterface::read(const rclcpp::Time &,
-                                                              const rclcpp::Duration &)
+                                                              const rclcpp::Duration &period)
     {
         std::lock_guard<std::mutex> lock(hw_interface_mutex_);
         if (!gripper_)
@@ -183,7 +187,17 @@ namespace rg_hardware_interface
         }
         try
         {
-            finger_width_state_ = gripper_->getWidthWithOffset();
+            const double width = gripper_->getWidthWithOffset();
+            if (width < 0.0) // RG::getWidthWithOffset returns -1 when the Modbus request failed: keep the last reading
+            {
+                RCLCPP_WARN(rclcpp::get_logger("RGHardwareInterface"), "%sgripper: width reading failed, keeping %.4f m",
+                            prefix_.c_str(), finger_width_state_);
+                finger_width_velocity_ = 0.0;
+                return hardware_interface::return_type::OK;
+            }
+            const double dt = period.seconds();
+            finger_width_velocity_ = dt > 0.0 ? (width - finger_width_state_) / dt : 0.0;
+            finger_width_state_ = width;
         }
         catch (const std::exception &e)
         {

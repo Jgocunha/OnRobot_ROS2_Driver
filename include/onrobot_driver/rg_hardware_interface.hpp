@@ -32,7 +32,8 @@ namespace rg_hardware_interface
         hardware_interface::CallbackReturn on_shutdown(const rclcpp_lifecycle::State &previous_state) override;
         hardware_interface::CallbackReturn on_error(const rclcpp_lifecycle::State &previous_state) override;
 
-        // Export hardware interfaces: we expose one state and one command interface for the joint "finger_width"
+        // Export hardware interfaces for the joint "finger_width": position command; position and velocity state
+        // (velocity estimated from successive width readings: GripperActionController needs it for stall detection)
         std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
         std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;
 
@@ -47,6 +48,7 @@ namespace rg_hardware_interface
 
         // Internal joint variable (position) in SI units (metres).
         double finger_width_state_;   // measured state (m)
+        double finger_width_velocity_; // estimated from successive readings (m/s)
         double finger_width_command_; // commanded position (m)
 
         // Connection parameters from hardware_info.

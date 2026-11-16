@@ -50,6 +50,7 @@ namespace rg_hardware_interface
         double finger_width_state_;   // measured state (m)
         double finger_width_velocity_; // estimated from successive readings (m/s)
         double finger_width_command_; // commanded position (m)
+        double last_sent_command_;    // last command sent to the gripper (m); NaN = none yet
 
         // Connection parameters from hardware_info.
         std::string onrobot_type_;

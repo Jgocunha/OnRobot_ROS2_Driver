@@ -1,5 +1,8 @@
 #include "onrobot_driver/rg_hardware_interface.hpp"
 
+#include <cmath>
+#include <limits>
+
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -9,7 +12,8 @@ namespace rg_hardware_interface
     RGHardwareInterface::RGHardwareInterface()
         : finger_width_state_(0.0),
           finger_width_velocity_(0.0),
-          finger_width_command_(0.0)
+          finger_width_command_(0.0),
+          last_sent_command_(std::numeric_limits<double>::quiet_NaN())
     {
     }
 
@@ -119,8 +123,9 @@ namespace rg_hardware_interface
 
             // Get the starting width of the gripper.
             finger_width_state_ = gripper_->getWidthWithOffset();
-            // Set the command to the current state to avoid moving to 0.0 at start.
+            // Set the command to the current state to avoid moving to 0.0 at start, and do not send it.
             finger_width_command_ = finger_width_state_;
+            last_sent_command_ = finger_width_command_;
             finger_width_velocity_ = 0.0;
         }
         catch (const std::exception &e)
@@ -216,9 +221,16 @@ namespace rg_hardware_interface
             RCLCPP_ERROR(rclcpp::get_logger("RGHardwareInterface"), "Gripper not initialised");
             return hardware_interface::return_type::ERROR;
         }
+        // Each move is three Modbus requests (stop, target, grip): send one only when the command changes.
+        if (std::isnan(finger_width_command_) ||
+            (!std::isnan(last_sent_command_) && std::fabs(finger_width_command_ - last_sent_command_) < 1e-4))
+        {
+            return hardware_interface::return_type::OK;
+        }
         try
         {
             gripper_->moveGripper(finger_width_command_);
+            last_sent_command_ = finger_width_command_;
         }
         catch (const std::exception &e)
         {

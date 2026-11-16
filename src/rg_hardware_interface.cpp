@@ -17,6 +17,12 @@ namespace rg_hardware_interface
 
     hardware_interface::CallbackReturn RGHardwareInterface::on_init(const hardware_interface::HardwareInfo &info)
     {
+        // Store the hardware info (its name, above all): without it every gripper is called "", and a second
+        // gripper in the same controller manager clashes with the first.
+        if (hardware_interface::ActuatorInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS)
+        {
+            return hardware_interface::CallbackReturn::ERROR;
+        }
         // Retrieve the gripper type from the hardware parameters.
         if (info.hardware_parameters.find("onrobot_type") != info.hardware_parameters.end())
         {
